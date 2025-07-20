@@ -1,8 +1,9 @@
 blueprint:
-  name: Kamera Bewegung Benachrichtigung mit Titel & Snapshot
+  name: Kamera Bewegung Benachrichtigung mit Titel, Bild & Ausschluss
   description: |
-    Sendet eine Benachrichtigung mit Titel und Bild von der Kamera, die eine Bewegung erkannt hat.
-    Kamera wird automatisch abgeleitet aus dem Sensor, z. B. `binary_sensor.kamera_terrasse_motion` → `camera.kamera_terrasse`
+    Sendet eine Push-Benachrichtigung mit Titel, Nachricht und Bild von der Kamera,
+    die Bewegung oder Anwesenheit erkannt hat. Unterstützt eine Ausschlussliste,
+    kritische Töne oder lautlose Benachrichtigungen.
   domain: automation
 
   input:
@@ -20,6 +21,7 @@ blueprint:
     excluded_sensors:
       name: Ausgeschlossene Sensoren
       description: Diese Sensoren werden ignoriert
+      default: []
       selector:
         entity:
           domain: binary_sensor
@@ -34,21 +36,21 @@ blueprint:
 
     notify_title:
       name: Nachrichtentitel
-      description: Titel der Benachrichtigung. Du kannst Variablen wie {{ trigger.entity_id }} verwenden.
+      description: Titel der Benachrichtigung. Platzhalter wie {{ trigger.entity_id }} möglich.
       default: Bewegung erkannt!
       selector:
         text:
 
     notify_message:
       name: Nachrichtentext
-      description: Text der Nachricht. Du kannst Variablen wie {{ trigger.entity_id }} verwenden.
+      description: Nachrichtentext. Platzhalter wie {{ trigger.entity_id }} möglich.
       default: Es wurde Bewegung erkannt bei {{ trigger.entity_id }}
       selector:
         text:
 
     notify_level:
       name: Benachrichtigungsstil
-      description: Ton, Lautstärke oder Lautlos
+      description: Ton, Lautstärke oder lautlos
       default: normal
       selector:
         select:
@@ -64,12 +66,8 @@ trigger:
     entity_id: !input included_sensors
     to: "on"
 
-condition:
-  - condition: template
-    value_template: >
-      {{ trigger.entity_id not in (inputs.excluded_sensors | default([])) }}
-
 variables:
+  excluded: !input excluded_sensors
   notify_service: >
     notify.mobile_app_{{ device_attr(notify_device, 'name') | lower | replace(" ", "_") }}
   message: "{{ notify_message }}"
@@ -79,6 +77,11 @@ variables:
     {{ 'camera.' + sensor_entity.split('.')[1].replace('_motion','').replace('_occupancy','') }}
   snapshot_path: "/config/www/snapshots/{{ camera_entity | replace('.', '_') }}.jpg"
   snapshot_url: "{{ snapshot_path | replace('/config/www', '/local') }}"
+
+condition:
+  - condition: template
+    value_template: >
+      {{ sensor_entity not in excluded }}
 
 action:
   - service: camera.snapshot
