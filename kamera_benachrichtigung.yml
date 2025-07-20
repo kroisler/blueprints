@@ -1,0 +1,92 @@
+blueprint:
+  name: Kamera Bewegung/Anwesenheit Benachrichtigung (mit Ausschluss)
+  description: |
+    Sendet eine Benachrichtigung, wenn eine ausgewählte Kamera Bewegung oder Anwesenheit erkennt,
+    mit der Möglichkeit, bestimmte Kameras auszuschließen und das Benachrichtigungsgerät sowie
+    den Benachrichtigungstyp auszuwählen.
+  domain: automation
+  input:
+    included_sensors:
+      name: Kamera-Sensoren (Bewegung oder Anwesenheit)
+      description: Wähle die Sensoren aus, die Benachrichtigungen auslösen sollen.
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class:
+            - motion
+            - occupancy
+          multiple: true
+
+    excluded_sensors:
+      name: Ausgeschlossene Sensoren
+      description: Diese Sensoren werden ignoriert, auch wenn sie in der oberen Liste enthalten sind.
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+
+    notify_device:
+      name: Zielgerät für Benachrichtigung
+      description: Wähle das Gerät, das die Nachricht empfangen soll.
+      selector:
+        device:
+          integration: mobile_app
+
+    notify_level:
+      name: Benachrichtigungsstil
+      description: Wähle, wie die Benachrichtigung gesendet werden soll.
+      default: normal
+      selector:
+        select:
+          options:
+            - normal
+            - kritisch
+            - lautlos
+
+mode: parallel
+
+trigger:
+  - platform: state
+    entity_id: !input included_sensors
+    to: "on"
+
+condition:
+  - condition: template
+    value_template: >
+      {{ trigger.entity_id not in (inputs.excluded_sensors | default([])) }}
+
+action:
+  - variables:
+      notify_service: >
+        notify.mobile_app_{{ device_attr(notify_device, 'name') | lower | replace(" ", "_") }}
+      message: >
+        🚨 Bewegung oder Anwesenheit erkannt durch: {{ trigger.entity_id }}
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ notify_level == 'kritisch' }}"
+        sequence:
+          - service: "{{ notify_service }}"
+            data:
+              message: "{{ message }}"
+              data:
+                push:
+                  sound:
+                    name: default
+                    critical: 1
+                    volume: 1.0
+      - conditions:
+          - condition: template
+            value_template: "{{ notify_level == 'lautlos' }}"
+        sequence:
+          - service: "{{ notify_service }}"
+            data:
+              message: "{{ message }}"
+              data:
+                push:
+                  sound: none
+    default:
+      - service: "{{ notify_service }}"
+        data:
+          message: "{{ message }}"
+
