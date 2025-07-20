@@ -1,13 +1,14 @@
 blueprint:
-  name: Kamera Bewegung/Anwesenheit Benachrichtigung (mit Optionen)
+  name: Kamera Bewegung Benachrichtigung mit Titel & Snapshot
   description: |
-    Sendet eine Benachrichtigung, wenn eine Kamera Bewegung oder Anwesenheit erkennt.
-    Unterstützt benutzerdefinierte Nachricht und optional Screenshot.
+    Sendet eine Benachrichtigung mit Titel und Bild von der Kamera, die eine Bewegung erkannt hat.
+    Kamera wird automatisch abgeleitet aus dem Sensor, z. B. `binary_sensor.kamera_terrasse_motion` → `camera.kamera_terrasse`
   domain: automation
+
   input:
     included_sensors:
-      name: Kamera-Sensoren (Bewegung oder Anwesenheit)
-      description: Wähle die Sensoren aus, die Benachrichtigungen auslösen sollen.
+      name: Kamera-Bewegungssensoren
+      description: Diese Sensoren lösen die Benachrichtigung aus
       selector:
         entity:
           domain: binary_sensor
@@ -18,22 +19,36 @@ blueprint:
 
     excluded_sensors:
       name: Ausgeschlossene Sensoren
-      description: Diese Sensoren werden ignoriert, auch wenn sie in der oberen Liste enthalten sind.
+      description: Diese Sensoren werden ignoriert
       selector:
         entity:
           domain: binary_sensor
           multiple: true
 
     notify_device:
-      name: Zielgerät für Benachrichtigung
-      description: Wähle das Gerät, das die Nachricht empfangen soll.
+      name: Zielgerät
+      description: Gerät, an das die Benachrichtigung gesendet wird
       selector:
         device:
           integration: mobile_app
 
+    notify_title:
+      name: Nachrichtentitel
+      description: Titel der Benachrichtigung. Du kannst Variablen wie {{ trigger.entity_id }} verwenden.
+      default: Bewegung erkannt!
+      selector:
+        text:
+
+    notify_message:
+      name: Nachrichtentext
+      description: Text der Nachricht. Du kannst Variablen wie {{ trigger.entity_id }} verwenden.
+      default: Es wurde Bewegung erkannt bei {{ trigger.entity_id }}
+      selector:
+        text:
+
     notify_level:
       name: Benachrichtigungsstil
-      description: Wähle, wie die Benachrichtigung gesendet werden soll.
+      description: Ton, Lautstärke oder Lautlos
       default: normal
       selector:
         select:
@@ -41,28 +56,6 @@ blueprint:
             - normal
             - kritisch
             - lautlos
-
-    custom_message:
-      name: Benachrichtigungstext
-      description: Verwende {{ trigger.entity_id }} oder anderen Text als Nachricht.
-      default: Bewegung erkannt bei {{ trigger.entity_id }}
-      selector:
-        text:
-
-    include_snapshot:
-      name: Snapshot mitsenden?
-      description: Wenn aktiviert, wird ein Bild der zugehörigen Kamera mitgeschickt.
-      default: false
-      selector:
-        boolean:
-
-    snapshot_camera:
-      name: Kamera für Snapshot
-      description: Kamera, von der ein Bild gesendet werden soll (falls aktiviert).
-      default: null
-      selector:
-        entity:
-          domain: camera
 
 mode: parallel
 
@@ -79,23 +72,21 @@ condition:
 variables:
   notify_service: >
     notify.mobile_app_{{ device_attr(notify_device, 'name') | lower | replace(" ", "_") }}
-  message: "{{ custom_message }}"
-  snapshot_enabled: !input include_snapshot
-  camera_entity: !input snapshot_camera
-  snapshot_path: "/config/www/snapshots/snapshot_{{ trigger.entity_id | replace('.', '_') }}.jpg"
+  message: "{{ notify_message }}"
+  title: "{{ notify_title }}"
+  sensor_entity: "{{ trigger.entity_id }}"
+  camera_entity: >
+    {{ 'camera.' + sensor_entity.split('.')[1].replace('_motion','').replace('_occupancy','') }}
+  snapshot_path: "/config/www/snapshots/{{ camera_entity | replace('.', '_') }}.jpg"
   snapshot_url: "{{ snapshot_path | replace('/config/www', '/local') }}"
 
 action:
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ snapshot_enabled }}"
-        sequence:
-          - service: camera.snapshot
-            data:
-              entity_id: "{{ camera_entity }}"
-              filename: "{{ snapshot_path }}"
-          - delay: "00:00:01"
+  - service: camera.snapshot
+    data:
+      entity_id: "{{ camera_entity }}"
+      filename: "{{ snapshot_path }}"
+
+  - delay: "00:00:01"
 
   - choose:
       - conditions:
@@ -104,6 +95,7 @@ action:
         sequence:
           - service: "{{ notify_service }}"
             data:
+              title: "{{ title }}"
               message: "{{ message }}"
               data:
                 push:
@@ -111,21 +103,23 @@ action:
                     name: default
                     critical: 1
                     volume: 1.0
-                image: "{{ snapshot_url if snapshot_enabled else none }}"
+                image: "{{ snapshot_url }}"
       - conditions:
           - condition: template
             value_template: "{{ notify_level == 'lautlos' }}"
         sequence:
           - service: "{{ notify_service }}"
             data:
+              title: "{{ title }}"
               message: "{{ message }}"
               data:
                 push:
                   sound: none
-                image: "{{ snapshot_url if snapshot_enabled else none }}"
+                image: "{{ snapshot_url }}"
     default:
       - service: "{{ notify_service }}"
         data:
+          title: "{{ title }}"
           message: "{{ message }}"
           data:
-            image: "{{ snapshot_url if snapshot_enabled else none }}"
+            image: "{{ snapshot_url }}"
