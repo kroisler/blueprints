@@ -1,9 +1,8 @@
 blueprint:
-  name: Kamera Bewegung/Anwesenheit Benachrichtigung (mit Ausschluss)
+  name: Kamera Bewegung/Anwesenheit Benachrichtigung (mit Optionen)
   description: |
-    Sendet eine Benachrichtigung, wenn eine ausgewählte Kamera Bewegung oder Anwesenheit erkennt,
-    mit der Möglichkeit, bestimmte Kameras auszuschließen und das Benachrichtigungsgerät sowie
-    den Benachrichtigungstyp auszuwählen.
+    Sendet eine Benachrichtigung, wenn eine Kamera Bewegung oder Anwesenheit erkennt.
+    Unterstützt benutzerdefinierte Nachricht und optional Screenshot.
   domain: automation
   input:
     included_sensors:
@@ -43,6 +42,28 @@ blueprint:
             - kritisch
             - lautlos
 
+    custom_message:
+      name: Benachrichtigungstext
+      description: Verwende {{ trigger.entity_id }} oder anderen Text als Nachricht.
+      default: Bewegung erkannt bei {{ trigger.entity_id }}
+      selector:
+        text:
+
+    include_snapshot:
+      name: Snapshot mitsenden?
+      description: Wenn aktiviert, wird ein Bild der zugehörigen Kamera mitgeschickt.
+      default: false
+      selector:
+        boolean:
+
+    snapshot_camera:
+      name: Kamera für Snapshot
+      description: Kamera, von der ein Bild gesendet werden soll (falls aktiviert).
+      default: null
+      selector:
+        entity:
+          domain: camera
+
 mode: parallel
 
 trigger:
@@ -55,12 +76,27 @@ condition:
     value_template: >
       {{ trigger.entity_id not in (inputs.excluded_sensors | default([])) }}
 
+variables:
+  notify_service: >
+    notify.mobile_app_{{ device_attr(notify_device, 'name') | lower | replace(" ", "_") }}
+  message: "{{ custom_message }}"
+  snapshot_enabled: !input include_snapshot
+  camera_entity: !input snapshot_camera
+  snapshot_path: "/config/www/snapshots/snapshot_{{ trigger.entity_id | replace('.', '_') }}.jpg"
+  snapshot_url: "{{ snapshot_path | replace('/config/www', '/local') }}"
+
 action:
-  - variables:
-      notify_service: >
-        notify.mobile_app_{{ device_attr(notify_device, 'name') | lower | replace(" ", "_") }}
-      message: >
-        🚨 Bewegung oder Anwesenheit erkannt durch: {{ trigger.entity_id }}
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ snapshot_enabled }}"
+        sequence:
+          - service: camera.snapshot
+            data:
+              entity_id: "{{ camera_entity }}"
+              filename: "{{ snapshot_path }}"
+          - delay: "00:00:01"
+
   - choose:
       - conditions:
           - condition: template
@@ -75,6 +111,7 @@ action:
                     name: default
                     critical: 1
                     volume: 1.0
+                image: "{{ snapshot_url if snapshot_enabled else none }}"
       - conditions:
           - condition: template
             value_template: "{{ notify_level == 'lautlos' }}"
@@ -85,8 +122,10 @@ action:
               data:
                 push:
                   sound: none
+                image: "{{ snapshot_url if snapshot_enabled else none }}"
     default:
       - service: "{{ notify_service }}"
         data:
           message: "{{ message }}"
-
+          data:
+            image: "{{ snapshot_url if snapshot_enabled else none }}"
