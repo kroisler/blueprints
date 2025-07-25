@@ -1,35 +1,28 @@
 blueprint:
-  name: Ring Intercom – Klingelbenachrichtigung (hausture_ding + TTS + Push + Zeit)
+  name: Ring Intercom – Türklingelton (hausture_ding + Push + Zeit)
   description: >
-    Reagiert auf das benutzerdefinierte Event `hausture_ding` von deiner Ring Intercom
-    und gibt eine TTS-Nachricht auf Lautsprechern aus + Push-Benachrichtigung, nur zu definierten Zeiten.
+    Spielt bei einem Klingel-Event (`hausture_ding`) einen Türklingelton auf ausgewählten Lautsprechern ab
+    und sendet zusätzlich eine Push-Benachrichtigung – zeitlich eingeschränkt.
   domain: automation
   input:
     media_players:
-      name: Lautsprecher (TTS-Ziel)
-      description: Wähle die Lautsprecher, auf denen die Nachricht abgespielt wird (z. B. HomePods)
+      name: Lautsprecher (Türklingelton-Ziel)
+      description: Wähle die Lautsprecher, auf denen der Türklingelton abgespielt wird
       selector:
         target:
           entity:
             domain: media_player
 
-    tts_service:
-      name: TTS-Service
-      description: Wähle den TTS-Dienst (z. B. tts.google_say)
-      default: tts.google_say
-      selector:
-        text:
-
-    tts_message:
-      name: TTS-Nachricht
-      description: Nachricht, die bei Klingeln gesprochen wird
-      default: "Es hat jemand an der Haustür geklingelt!"
+    media_url:
+      name: Medien-URL des Klingeltons
+      description: Pfad zur Audiodatei (z. B. /media/local/klingel.mp3)
+      default: /media/local/klingel.mp3
       selector:
         text:
 
     notify_device:
       name: Push-Gerät
-      description: Gerät mit Home Assistant App für Push-Benachrichtigung
+      description: Mobilgerät mit Home Assistant App für Push-Benachrichtigung
       selector:
         device:
           integration: mobile_app
@@ -70,10 +63,11 @@ action:
   - repeat:
       for_each: "{{ media_player_entities }}"
       sequence:
-        - service: !input tts_service
+        - service: media_player.play_media
           data:
+            media_content_id: !input media_url
+            media_content_type: music
             entity_id: "{{ repeat.item }}"
-            message: !input tts_message
 
   - service: notify.notify
     data:
