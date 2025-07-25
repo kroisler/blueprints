@@ -1,20 +1,13 @@
 blueprint:
-  name: Ring Intercom (Event-basiert) – Klingelbenachrichtigung (TTS + Push + Zeit)
+  name: Ring Intercom – Klingelbenachrichtigung (hausture_ding + TTS + Push + Zeit)
   description: >
-    Löst bei einem benutzerdefinierten Event (z. B. hausture_ding) eine TTS-Benachrichtigung
-    über Lautsprecher aus und sendet eine Push-Nachricht an ein Mobilgerät – mit Zeitfenster.
+    Reagiert auf das benutzerdefinierte Event `hausture_ding` von deiner Ring Intercom
+    und gibt eine TTS-Nachricht auf Lautsprechern aus + Push-Benachrichtigung, nur zu definierten Zeiten.
   domain: automation
   input:
-    ring_event:
-      name: Klingel-Event
-      description: Der Event-Name, der beim Klingeln ausgelöst wird (z. B. hausture_ding)
-      default: hausture_ding
-      selector:
-        text:
-
     media_players:
       name: Lautsprecher (TTS-Ziel)
-      description: Wähle Lautsprecher für die Benachrichtigung
+      description: Wähle die Lautsprecher, auf denen die Nachricht abgespielt wird (z. B. HomePods)
       selector:
         target:
           entity:
@@ -22,49 +15,49 @@ blueprint:
 
     tts_service:
       name: TTS-Service
-      description: Text-to-Speech Dienst (z. B. tts.google_say)
+      description: Wähle den TTS-Dienst (z. B. tts.google_say)
       default: tts.google_say
       selector:
         text:
 
     tts_message:
       name: TTS-Nachricht
-      description: Gesprochener Text bei Klingelereignis
+      description: Nachricht, die bei Klingeln gesprochen wird
       default: "Es hat jemand an der Haustür geklingelt!"
       selector:
         text:
 
     notify_device:
       name: Push-Gerät
-      description: Mobilgerät für Push-Benachrichtigung (Home Assistant App)
+      description: Gerät mit Home Assistant App für Push-Benachrichtigung
       selector:
         device:
           integration: mobile_app
 
     push_message:
       name: Push-Nachricht
-      description: Text der Benachrichtigung an dein Mobilgerät
+      description: Nachricht, die ans Mobilgerät geschickt wird
       default: "Klingel: Es hat jemand an der Haustür geklingelt."
       selector:
         text:
 
     start_time:
       name: Startzeit
-      description: Frühester Zeitpunkt, an dem die Benachrichtigung erfolgen darf
+      description: Frühester Zeitpunkt, zu dem die Benachrichtigung erfolgen darf
       default: "07:00:00"
       selector:
         time:
 
     end_time:
       name: Endzeit
-      description: Spätester Zeitpunkt, an dem die Benachrichtigung erfolgen darf
+      description: Spätester Zeitpunkt, bis zu dem Benachrichtigungen erlaubt sind
       default: "22:00:00"
       selector:
         time:
 
 trigger:
   - platform: event
-    event_type: !input ring_event
+    event_type: hausture_ding
 
 condition:
   - condition: time
@@ -82,9 +75,10 @@ action:
             entity_id: "{{ repeat.item }}"
             message: !input tts_message
 
-  - service: >
-      notify.mobile_app_{{ device_attr(!input notify_device, 'name') | lower | replace(' ', '_') }}
+  - service: notify.notify
     data:
       message: !input push_message
+      target:
+        - !input notify_device
 
 mode: single
