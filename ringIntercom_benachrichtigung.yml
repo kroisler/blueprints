@@ -1,7 +1,8 @@
 blueprint:
   name: Ring Intercom – Klingelbenachrichtigung (TTS + Push + Zeit)
   description: >
-    Gibt bei einem Klingelereignis eine Benachrichtigung über HomePods (TTS) und sendet eine Push-Mitteilung – optional mit Zeitfenster.
+    Gibt bei Klingeln eine Nachricht über Lautsprecher (z. B. HomePods) mit TTS aus
+    und sendet zusätzlich eine Push-Nachricht. Nur aktiv im definierten Zeitfenster.
   domain: automation
   input:
     ring_sensor:
@@ -12,8 +13,8 @@ blueprint:
           domain: binary_sensor
 
     media_players:
-      name: Lautsprecher (z. B. HomePods)
-      description: Wähle die Geräte aus, auf denen die Audio-Nachricht abgespielt wird.
+      name: Lautsprecher (TTS-Ziel)
+      description: Wähle Lautsprecher für die Benachrichtigung
       selector:
         target:
           entity:
@@ -21,40 +22,42 @@ blueprint:
 
     tts_service:
       name: TTS-Service
-      description: Wähle den TTS-Service (z. B. tts.google_say)
+      description: Text-to-Speech Dienst (z. B. tts.google_say)
       default: tts.google_say
       selector:
         text:
 
     tts_message:
       name: TTS-Nachricht
-      description: Was soll über die Lautsprecher gesagt werden?
+      description: Gesprochener Text bei Klingelereignis
       default: "Es hat jemand an der Tür geklingelt!"
       selector:
         text:
 
     notify_device:
-      name: Mobilgerät für Push
-      description: Gerät mit Home Assistant App für Push-Mitteilung
+      name: Push-Gerät
+      description: Mobilgerät für Push-Benachrichtigung (Home Assistant App)
       selector:
         device:
           integration: mobile_app
 
     push_message:
       name: Push-Nachricht
-      description: Nachricht, die als Push versendet wird
+      description: Text der Benachrichtigung an dein Mobilgerät
       default: "Klingel: Es hat jemand an der Tür geklingelt."
       selector:
         text:
 
     start_time:
-      name: Startzeit (aktiv ab)
+      name: Startzeit
+      description: Frühester Zeitpunkt, an dem die Benachrichtigung erfolgen darf
       default: "07:00:00"
       selector:
         time:
 
     end_time:
-      name: Endzeit (aktiv bis)
+      name: Endzeit
+      description: Spätester Zeitpunkt, an dem die Benachrichtigung erfolgen darf
       default: "22:00:00"
       selector:
         time:
@@ -71,15 +74,18 @@ condition:
     before: !input end_time
 
 action:
+  - variables:
+      media_player_entities: "{{ expand(targets.media_players) | map(attribute='entity_id') | list }}"
   - repeat:
-      for_each: "{{ expand(targets['media_players']) | map(attribute='entity_id') | list }}"
+      for_each: "{{ media_player_entities }}"
       sequence:
         - service: !input tts_service
           data:
             entity_id: "{{ repeat.item }}"
             message: !input tts_message
 
-  - service: notify.mobile_app_{{ device_attr(!input notify_device, 'name') | lower | replace(' ', '_') }}
+  - service: >
+      notify.mobile_app_{{ device_attr(!input notify_device, 'name') | lower | replace(' ', '_') }}
     data:
       message: !input push_message
 
