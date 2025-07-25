@@ -1,16 +1,16 @@
 blueprint:
-  name: Ring Intercom – Klingelbenachrichtigung (TTS + Push + Zeit)
+  name: Ring Intercom (Event-basiert) – Klingelbenachrichtigung (TTS + Push + Zeit)
   description: >
-    Gibt bei Klingeln eine Nachricht über Lautsprecher (z. B. HomePods) mit TTS aus
-    und sendet zusätzlich eine Push-Nachricht. Nur aktiv im definierten Zeitfenster.
+    Löst bei einem benutzerdefinierten Event (z. B. hausture_ding) eine TTS-Benachrichtigung
+    über Lautsprecher aus und sendet eine Push-Nachricht an ein Mobilgerät – mit Zeitfenster.
   domain: automation
   input:
-    ring_sensor:
-      name: Klingelsensor
-      description: Entität, die das Klingeln meldet (z. B. binary_sensor.ring_klingel)
+    ring_event:
+      name: Klingel-Event
+      description: Der Event-Name, der beim Klingeln ausgelöst wird (z. B. hausture_ding)
+      default: hausture_ding
       selector:
-        entity:
-          domain: binary_sensor
+        text:
 
     media_players:
       name: Lautsprecher (TTS-Ziel)
@@ -30,7 +30,7 @@ blueprint:
     tts_message:
       name: TTS-Nachricht
       description: Gesprochener Text bei Klingelereignis
-      default: "Es hat jemand an der Tür geklingelt!"
+      default: "Es hat jemand an der Haustür geklingelt!"
       selector:
         text:
 
@@ -44,7 +44,7 @@ blueprint:
     push_message:
       name: Push-Nachricht
       description: Text der Benachrichtigung an dein Mobilgerät
-      default: "Klingel: Es hat jemand an der Tür geklingelt."
+      default: "Klingel: Es hat jemand an der Haustür geklingelt."
       selector:
         text:
 
@@ -63,10 +63,8 @@ blueprint:
         time:
 
 trigger:
-  - platform: state
-    entity_id: !input ring_sensor
-    from: "off"
-    to: "on"
+  - platform: event
+    event_type: !input ring_event
 
 condition:
   - condition: time
